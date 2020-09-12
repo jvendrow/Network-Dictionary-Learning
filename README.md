@@ -25,7 +25,7 @@ Our package lies on the backbone of the NNetwork class (see https://github.com/H
 >>> G = Wtd_NNetwork()
 >>> G.load_edges("Data/example.txt", delimiter=",")
 ```
-### Learning a Dictionary
+#### Learning a Dictionary
 
 ```python
 >>> from ndl import NetDictLearner
@@ -44,15 +44,16 @@ Replace the dictionary with a pre-trained dictionary and/or replace the network:
 >>> NDL.set_dict(W)
 >>> NDL.set_network(G)
 ```
-### Reconstructing a Network
+#### Reconstructing a Network
 
 ```python
 >>> G_recons = NDL.reconstruct(recon_iters=10000)
 ```
 
+
 The NetDictLearner class provices the base code to perform network dictionary learning and network reconstruction, but we also provide a series of helper fuctions to use alongside the NetDictLearner class to assist on performing tasks related to Network Dictionary Learning and evaluate performance. 
 
-### Measure Accuracy of Reconstruction (Jaccard)
+#### Measure Accuracy of Reconstruction (Jaccard)
 
 ```python
 >>> from ndl import Utils
@@ -60,7 +61,7 @@ The NetDictLearner class provices the base code to perform network dictionary le
 0.92475345
 ```
 
-### Network Denoising Application
+#### Network Denoising Application
 
 To add positive corruption (overlaying edges) or negative corruption (deleting edges) from a networks:
 ```python
