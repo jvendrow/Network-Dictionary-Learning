@@ -8,7 +8,7 @@ Learning from and reconstructing networks using Nonnegative Matrix Factorization
 
 ## Installation
 
-To install fnnls, run this command in your terminal:
+To install the Network Dictionary Learning package, run this command in your terminal:
 
 ```bash
 $ pip install ndl
