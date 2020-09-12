@@ -18,14 +18,15 @@ This is the preferred method to install Network Dictionary Learning. If you don'
 
 ## Usage
 
-Our package lies on the backbone of the NNetwork class (see https://github.com/HanbaekLyu/NNetwork). To load in a graph from an edgelist:
+Our package lies on the backbone of the NNetwork class (see https://github.com/HanbaekLyu/NNetwork). 
+
 ```python
 >>> from NNetwork import Wtd_NNetwork
 >>> G = Wtd_NNetwork()
 >>> G.load_edges("Data/example.txt", delimiter=",")
 ```
+### Learning a Dictionary
 
-Initialize an NDL object with the and learn a dictionary:
 ```python
 >>> from ndl import NetDictLearner
 >>> NDL = NetDictLearner(G=G, n_components=25, k=21)
@@ -43,21 +44,23 @@ Replace the dictionary with a pre-trained dictionary and/or replace the network:
 >>> NDL.set_dict(W)
 >>> NDL.set_network(G)
 ```
+### Reconstructing a Network
 
-Reconstruct the network using the set dictionary:
 ```python
 >>> G_recons = NDL.reconstruct(recon_iters=10000)
 ```
 
 The NetDictLearner class provices the base code to perform network dictionary learning and network reconstruction, but we also provide a series of helper fuctions to use alongside the NetDictLearner class to assist on performing tasks related to Network Dictionary Learning and evaluate performance. 
 
-To measure the accuracy of a reconstruction using the Jaccard metric:
+### Measure Accuracy of Reconstruction (Jaccard)
 
 ```python
 >>> from ndl import Utils
 >>> Utils.jaccard(G, G_recons)
 0.92475345
 ```
+
+### Network Denoising Application
 
 To add positive corruption (overlaying edges) or negative corruption (deleting edges) from a networks:
 ```python
