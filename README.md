@@ -47,7 +47,7 @@ Replace the dictionary with a pre-trained dictionary and/or replace the network:
 #### Reconstructing a Network
 
 ```python
->>> G_recons = NDL.reconstruct(recon_iters=10000)
+>>> G_recons = NDL.reconstruct(recons_iter=10000)
 ```
 
 
@@ -56,8 +56,8 @@ The NetDictLearner class provices the base code to perform network dictionary le
 #### Measure Accuracy of Reconstruction (Jaccard)
 
 ```python
->>> from ndl import Utils
->>> Utils.jaccard(G, G_recons)
+>>> from ndl import utils
+>>> utils.recons_accuracy(G, G_recons)
 0.92475345
 ```
 
@@ -67,21 +67,21 @@ To add positive corruption (overlaying edges) or negative corruption (deleting e
 ```python
 >>> len(G.edges())
 1000
->>> G_add_50 = Utils.corrupt(G, p=0.5, noise_type="ER")
+>>> G_add_50 = utils.corrupt(G, p=0.5, noise_type="ER")
 >>>len(G_add_50.edges())
 1500
->>> G_remove_10 = Utils.corrupt(G, p=-0.1)
+>>> G_remove_10 = utils.corrupt(G, p=-0.1)
 >>>len(G_remove_10.edges())
 900
 ```
 
 To measure the AUC of network denoising with positive (or negative) noise:
 ```python
->>> G_corrupt = Utils.corrupt(G, p=0.5, noise_type="ER")
+>>> G_corrupt = utils.corrupt(G, p=0.5, noise_type="ER")
 >>> NDL_corrupt = NetDictLearner(G=G_corrupt)
->>> NDL.train_dict()
->>> G_corrupt_recons = NDL.reconstruct(recon_iters=10000)
->>> Utils.auc(original=G, corrupt=G_corrupt, corrupt_recons=G_corrupt_recons, type="positive")
+>>> NDL_corrupt.train_dict()
+>>> G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000)
+>>> utils.auc(original=G, corrupt=G_corrupt, corrupt_recons=G_corrupt_recons, type="positive")
 0.864578
 ```
 
