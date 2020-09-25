@@ -50,6 +50,6 @@ def subtractive_corruption():
     print(auc)
 
 
-#learn_and_reconstruct()
+learn_and_reconstruct()
 #additive_corruption()
-subtractive_corruption()
+#subtractive_corruption()
