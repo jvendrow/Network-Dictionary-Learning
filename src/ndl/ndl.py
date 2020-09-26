@@ -31,13 +31,13 @@ class NetDictLearner():
                  MCMC_iterations=500,
                  sub_iterations=100,
                  sample_size=1000,
-                 batch_size=10,
                  k=21,
                  alpha=None,
                  is_glauber_dict=True,
                  is_glauber_recons=True,
                  Pivot_exact_MH_rule=False,
                  ONMF_subsample=True,
+                 batch_size=10,
                  if_wtd_network=False,
                  if_tensor_ntwk=False,
                  omit_folded_edges=False):
@@ -48,24 +48,29 @@ class NetDictLearner():
         Parameters
         ----------
         G: Wtd_NNetwork object
-            Network to use for learning and reconstruction
+            Network to use for learning and reconstruction.
 
         n_components: int
-            The number of element to include in the network dictionary
+            The number of element to include in the network dictionary.
 
         MCMC_iterations: int
             The number of monte carlo markov chain iterations to run
-            for sampling the network during learning
+            for sampling the network during learning.
 
         sample_size: int
-
-        batch_size: int
-             number of patches used for training dictionaries per ONMF iteration
+           Number of sample patches that form the minibatch matrix X_t at
+           iterations t.
 
         k: int
-            Length of chain motif to use for sampling
+            Length of chain motif to use for sampling.
 
         alpha: int
+            By default None. If not none, L1 regularizer for code
+            matrix H, which is th solution to the following minimization 
+            problem:
+                || X - WH||_F^2 + alpha * ||H||_1, 
+            where the columns of X contain the sample patches and the columns
+            of W form the network dictionary.
 
         is_glauber_dict: bool
             By default, True. If True, use glauber chain sampling to 
@@ -78,16 +83,18 @@ class NetDictLearner():
             use pivon chain for sampling.
 
         ONMF_subsample: bool
+            By default, True. If True, during the dictionary update step
+            from W_{t-1} to W_t, subsample columns of X_t, the sample patches taken
+            at iterations t. Else, use the entire matrix X_t.
+        
+        batch_size: int
+             number of patches used for training dictionaries per ONMF iteration.
 
-        if_wtd_network: bool
-
-        if_tensor_network: bool
 
         omit_folded_edges: bool
             By default, True. If True, ignores edges that are 'folded,' meaning that
             they are already represented within each patch in another entry, caused
             by the MCMC motif folding on itself.
-
 
         """
         self.G = G  ### Full netowrk -- could have positive or negagtive edge weights (as a NNetwork or Wtd_NNetwork class)
@@ -120,7 +127,7 @@ class NetDictLearner():
         self.if_wtd_network = if_wtd_network
 
 
-    def train_dict(self, jump_every=20, update_dict_save=True, verbose=True):
+    def train_dict(self, jump_every=20, verbose=True):
         """
         Performs the Network Dictionary Learning algorithm to train a dictionary
         of latent motifs that aim approximate any given 'patch' of the network.
@@ -130,8 +137,6 @@ class NetDictLearner():
         jump_every: int
             By default, 20. The number of MCMC iterations to perform before
             resampling a patch to encourage coverage of the network.
-
-        update_dict_save: bool
 
         verbose: bool
             By default, True. If true, displays a progress bar for training. 
@@ -200,11 +205,10 @@ class NetDictLearner():
                 error = np.trace(self.W @ self.At @ self.W.T) - 2 * np.trace(self.W @ self.Bt) + np.trace(self.Ct)
                 errors.append(error)
         self.code = code
-        if update_dict_save:
-            self.result_dict.update({'Dictionary learned': self.W})
-            self.result_dict.update({'Motif size': self.k})
-            self.result_dict.update({'Code learned': self.code})
-            self.result_dict.update({'Code COV learned': self.At})
+        self.result_dict.update({'Dictionary learned': self.W})
+        self.result_dict.update({'Motif size': self.k})
+        self.result_dict.update({'Code learned': self.code})
+        self.result_dict.update({'Code COV learned': self.At})
         # print(self.W)
         return self.W
 
@@ -346,16 +350,13 @@ class NetDictLearner():
     def reconstruct(self,
                             recons_iter=1000,
                             if_save_history=True,
-                            if_construct_WtdNtwk=True,
                             use_checkpoint_refreshing=False,
                             ckpt_epoch=1000,
                             jump_every=None,
                             omit_chain_edges=False,  ### Turn this on for denoising
                             omit_folded_edges=True,
-                            if_save_wtd_reconstruction=False,
                             edge_threshold=0.5,
-                            return_weighted=False,
-                            edges_added=None,
+                            return_weighted=True,
                             save_filename=None,
                             save_folder=None,
                             verbose=True):
@@ -373,6 +374,24 @@ class NetDictLearner():
             run the reconstruction algorithm. Higher iterations tend to give
             higher accuracy by allowing more time for convergence.
 
+        if_save_history: bool
+            By default, True. If True, save the history of each homomosphism
+            sampled during reconstruction.
+
+        use_checkpoint_refreshing: bool
+            By default, False. If True, every ckpt_epoch iterations, save the current
+            reconstruction and reset, and combine all results at the end. We recommend 
+            turning this on to save memory. 
+
+        ckpt_epoch: int
+            Number of epochs between checkpoint refreshing, if the parameter above is 
+            set to True.
+
+        jump_every: int
+            By default, None. If not None, the homomorphism is re-initialized every
+            jump_every iterations to encourage visiting the full network. This is
+            recommended when using Glauber chain for sampling.
+
         omit_chain_edges: bool
             By default, False. If True, omits chain edges during reconstruction
             to prevent reconstructing edges directly along the motif chain, which
@@ -382,6 +401,14 @@ class NetDictLearner():
             By default, True. If True, ignores edges that are 'folded,' meaning that
             they are already represented within each patch in another entry, caused
             by the MCMC motif folding on itself.
+
+        edge_threshold: float
+            If return_weighted is set to false, we set all edge weights above edge_threshold
+            to 1, and set all others to 0, before returning the network.
+
+        return_weighted:
+
+
 
         verbose: bool
             By default, True. If True, shows a progress bar for reconstruction iterations
@@ -496,17 +523,16 @@ class NetDictLearner():
                 else:
                     new_edge_weight = patch_recons[x[0], x[1]]
 
-                if if_construct_WtdNtwk:
-                    if new_edge_weight > 0 and not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                        self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
-                        ### Add the same edge to the baseline reconstruction
-                        ### if x[0] and x[1] are adjacent in the chain motif
-                    if np.abs(x[0] - x[1]) == 1:
-                        # print('baseline edge added!!')
-                        self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
+                if new_edge_weight > 0 and not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
+                    self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
+                    ### Add the same edge to the baseline reconstruction
+                    ### if x[0] and x[1] are adjacent in the chain motif
+                if np.abs(x[0] - x[1]) == 1:
+                    # print('baseline edge added!!')
+                    self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
 
-                    if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                        self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
+                if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
+                    self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
 
             has_saved_checkpoint = False
             # progress status, saving reconstruction checkpoint, and memory refreshing
@@ -569,9 +595,6 @@ class NetDictLearner():
         self.result_dict.update({'omit_chain_edges for NDR': omit_chain_edges})
 
         ### Save weigthed reconstruction (To get the full version, turn off use_checkpoint_refreshing)
-        if if_save_wtd_reconstruction:
-            self.result_dict.update({'Edges in weighted reconstruction': self.G_recons.get_wtd_edgelist()})
-
 
         ### Finalize the simplified reconstruction graph
         G_recons_final = self.G_recons.threshold2simple(threshold=edge_threshold)
