@@ -16,7 +16,10 @@ from sklearn.decomposition import SparseCoder
 DEBUG = False
 
 
-class Online_NTF():
+class Online_NMF():
+    # Reference: Hanbaek Lyu, Deanna Needell, and Laura Balzano,
+    # “Online matrix factorization for markovian data and applications to network dictionary learning.” (2019)
+    # https://arxiv.org/abs/1911.01931
 
     def __init__(self,
                  X, n_components=100,

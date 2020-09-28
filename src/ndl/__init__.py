@@ -13,5 +13,5 @@ __copyright__ = "Copyright (c) 2020, Hanbaek Lyu"
 
 
 from .ndl import *
-from .ontf import *
+from .onmf import *
 from .NNetwork import *

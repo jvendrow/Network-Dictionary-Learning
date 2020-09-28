@@ -1,5 +1,5 @@
 # from utils.onmf.onmf import Online_NMF
-from ndl.ontf import Online_NTF
+from ndl.onmf import Online_NMF
 
 from ndl.NNetwork import NNetwork, Wtd_NNetwork
 import numpy as np
@@ -176,7 +176,7 @@ class NetDictLearner():
             if not self.if_tensor_ntwk:
                 X = np.expand_dims(X, axis=1)  ### X.shape = (k**2, 1, sample_size)
             if t == 0:
-                self.ntf = Online_NTF(X, self.n_components,
+                self.ntf = Online_NMF(X, self.n_components,
                                       iterations=self.sub_iterations,
                                       batch_size=self.batch_size,
                                       alpha=self.alpha,
@@ -186,7 +186,7 @@ class NetDictLearner():
                 self.W, self.At, self.Bt, self.Ct, self.H = self.ntf.train_dict()
                 self.H = code
             else:
-                self.ntf = Online_NTF(X, self.n_components,
+                self.ntf = Online_NMF(X, self.n_components,
                                       iterations=self.sub_iterations,
                                       batch_size=self.batch_size,
                                       ini_dict=self.W,
@@ -357,8 +357,7 @@ class NetDictLearner():
                             omit_folded_edges=True,
                             edge_threshold=0.5,
                             return_weighted=True,
-                            save_filename=None,
-                            save_folder=None,
+                            save_file_path=None,
                             verbose=True):
 
 
@@ -417,8 +416,11 @@ class NetDictLearner():
 
         print('reconstructing given network...')
         
-        if save_folder is None:
-            save_folder = "Network_dictionary"
+        if save_file_path is None:
+            save_file_path = "Network_dictionary/ndl_test"
+
+        self.result_dict.update({'NDR iterations': recons_iter})
+        self.result_dict.update({'omit_chain_edges for NDR': omit_chain_edges})
 
         G = self.G
         self.G_recons = Wtd_NNetwork()
@@ -444,11 +446,14 @@ class NetDictLearner():
         W_ext_reduced = W_ext
 
         ### Set up paths and folders
-        default_folder = 'Temp_save_graphs'
+        ### Set up paths and folders
+        default_folder = 'src/Temp_save_graphs'
         default_name_recons = 'temp_wtd_edgelist_recons'
         default_name_recons_baseline = 'temp_wtd_edgelist_recons_baseline'
-        path_recons = default_folder + '/' + default_name_recons + '.txt'
+        default_name_overlap_count = 'temp_overlap_count'
+        path_recons = save_file_path + '.txt'
         path_recons_baseline = default_folder + '/' + default_name_recons_baseline + '.txt'
+        path_overlap_count = default_folder + '/' + default_name_overlap_count + '.txt'
 
         t0 = time()
         c = 0
@@ -534,47 +539,37 @@ class NetDictLearner():
                 if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
                     self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
 
-            has_saved_checkpoint = False
-            # progress status, saving reconstruction checkpoint, and memory refreshing
-            if t % 1000 == 0:
-                self.result_dict.update({'homomorphisms_history': emb_history})
-                self.result_dict.update({'code_history': code_history})
-                #print('iteration %i out of %i' % (t, recons_iter))
+                # print progress status and memory use
+                if t % 1000 == 0:
+                    self.result_dict.update({'homomorphisms_history': emb_history})
+                    self.result_dict.update({'code_history': code_history})
+                    print('iteration %i out of %i' % (t, recons_iter))
 
-                # print('num edges in G_count', len(self.G_overlap_count.get_edges()))
-                # print('num edges in G_recons', len(self.G_recons.get_edges()))
-
-                if use_checkpoint_refreshing and t % ckpt_epoch == 0:
-                    ### print out current memory usage
+                # refreshing memory at checkpoints
+                has_saved_checkpoint = False
+                if (ckpt_epoch is not None) and (t % ckpt_epoch == 0):
+                    # print out current memory usage
                     pid = os.getpid()
                     py = psutil.Process(pid)
                     memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
                     print('memory use:', memoryUse)
 
-                    ### Threshold and simplify the current reconstruction graph
-                    G_recons_simplified = self.G_recons.threshold2simple(threshold=edge_threshold)
-                    G_recons_combined = Wtd_NNetwork()
-                    G_recons_combined.add_edges(edges=G_recons_simplified.get_edges(),
-                                                edge_weight=1,
-                                                increment_weights=True)
-
-                    ### Do the same thing for the baseline reconstruction
-                    G_recons_simplified_baseline = self.G_recons_baseline.threshold2simple(threshold=edge_threshold)
-                    G_recons_combined_baseline = Wtd_NNetwork()
-                    G_recons_combined_baseline.add_edges(edges=G_recons_simplified.get_edges(),
-                                                         edge_weight=1,
-                                                         increment_weights=True)
+                    # print('num edges in G_count', len(self.G_overlap_count.get_edges()))
+                    # print('num edges in G_recons', len(self.G_recons.get_edges()))
 
                     ### Load and combine with the saved edges and reconstruction counts
                     if has_saved_checkpoint:
-                        G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
-                        G_recons_combined_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
+                        self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=True)
+                        self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
+                        self.G_overlap_count.load_add_wtd_edges(path=path_overlap_count, increment_weights=True)
 
                     ### Save current graphs
-                    G_recons_combined.save_wtd_edgelist(default_folder=default_folder,
-                                                        default_name=default_name_recons)
-                    G_recons_combined_baseline.save_wtd_edgelist(default_folder=default_folder,
-                                                                 default_name=default_name_recons_baseline)
+                    self.G_recons.save_wtd_edgelist(default_folder=default_folder,
+                                                    default_name=default_name_recons)
+                    self.G_recons_baseline.save_wtd_edgelist(default_folder=default_folder,
+                                                             default_name=default_name_recons_baseline)
+                    self.G_overlap_count.save_wtd_edgelist(default_folder=default_folder,
+                                                           default_name=default_name_overlap_count)
 
                     has_saved_checkpoint = True
 
@@ -589,44 +584,25 @@ class NetDictLearner():
                     self.G_recons_baseline.add_nodes(nodes=[v for v in G.vertices])
                     self.G_overlap_count.add_nodes(nodes=[v for v in G.vertices])
 
-                # print('num edges in G_recons', len(self.G_recons.get_edges()))
-
-        self.result_dict.update({'NDR iterations': recons_iter})
-        self.result_dict.update({'omit_chain_edges for NDR': omit_chain_edges})
-
-        ### Save weigthed reconstruction (To get the full version, turn off use_checkpoint_refreshing)
-
         ### Finalize the simplified reconstruction graph
         G_recons_final = self.G_recons.threshold2simple(threshold=edge_threshold)
         G_recons_final_baseline = self.G_recons_baseline.threshold2simple(threshold=edge_threshold)
-        if use_checkpoint_refreshing:
+        if ckpt_epoch is not None:
             ### Finalizing reconstruction
             G_recons_combined = Wtd_NNetwork()
-            if not self.if_wtd_network:
-                G_recons_combined.add_edges(edges=G_recons_final.get_edges(),
-                                            edge_weight=1,
+
+            G_recons_combined.add_wtd_edges(edges=self.G_recons.get_wtd_edgelist(),
                                             increment_weights=True)
-                G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
-                G_recons_final = G_recons_combined.threshold2simple(threshold=edge_threshold)
-            else:
-                G_recons_combined.add_wtd_edges(edges=self.G_recons.get_wtd_edgelist(),
-                                                increment_weights=True)
-                G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
-                G_recons_final = G_recons_combined
+            G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
+            G_recons_final = G_recons_combined
 
             ### Finalizing baseline reconstruction
             G_recons_combined_baseline = Wtd_NNetwork()
-            if not self.if_wtd_network:
-                G_recons_combined_baseline.add_edges(edges=G_recons_final_baseline.get_edges(),
-                                                     edge_weight=1,
+
+            G_recons_combined_baseline.add_wtd_edges(edges=self.G_recons_baseline.get_wtd_edgelist(),
                                                      increment_weights=True)
-                G_recons_combined_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-                G_recons_final_baseline = G_recons_combined_baseline.threshold2simple(threshold=edge_threshold)
-            else:
-                G_recons_combined_baseline.add_wtd_edges(edges=self.G_recons_baseline.get_wtd_edgelist(),
-                                                         increment_weights=True)
-                G_recons_combined.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-                G_recons_final_baseline = G_recons_combined_baseline
+            G_recons_combined.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
+            G_recons_final_baseline = G_recons_combined_baseline
 
             self.G_recons = G_recons_final
             self.G_recons_baseline = G_recons_final_baseline
