@@ -6,24 +6,27 @@ from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 
 
-def recons_accuracy(G, G_recons, if_baseline=False, edges_added=None, verbose=True):
-    ### Compute reconstruction error
+def recons_accuracy(G, G_recons):
+    """
+    Calculates the Jaccard index (accuracy) between the orignal graph and the reconstructed graph
+
+    Parameters
+    ----------
+    G: Wtd_NNetwork object
+        The original network.
+
+    G_recons: Wtd_NNetwork object
+        The reconstructed network. 
+
+    Returns
+    -------
+    recons_accuracy: float
+        The Jaccard index (accuracy) between the graphs
+    """
+
     G_recons.add_nodes(G.vertices)
     common_edges = G.intersection(G_recons)
     recons_accuracy = len(common_edges) / (len(G.get_edges()) + len(G_recons.get_edges()) - len(common_edges))
-
-    if(verbose):
-        print('# edges of original ntwk=', len(G.get_edges()))
-        
-        print('# edges of reconstructed ntwk=', len(G_recons.get_edges()))
-        print('Jaccard reconstruction accuracy=', recons_accuracy)
-
-    if if_baseline:
-        print('# edges of reconstructed baseline ntwk=', len(self.G_recons_baseline.get_edges()))
-        common_edges_baseline = G.intersection(self.G_recons_baseline)
-        recons_accuracy_baseline = len(common_edges_baseline) / (
-                len(G.get_edges()) + len(self.G_recons_baseline.get_edges()) - len(common_edges_baseline))
-        print('reconstruction accuracy for baseline=', recons_accuracy_baseline)
 
     return recons_accuracy
 
@@ -68,7 +71,48 @@ def corrupt(G, path_save=None,
                            parameter=0.1,
                            noise_nodes=None,
                            noise_type='ER'):
-    ### noise_type = 'ER' (Erdos-Renyi), 'WS' (Watts-Strongatz), 'BA' (Barabasi-Albert), '-ER_edges' (Delete ER edges)
+    """
+    Corrupts a graph G with additive or subtractive noise. 
+    
+    Options:
+        noise_type='ER': ADDS nx.erdos_renyi_graph(noise_nodes, parameter)
+        noise_type='WS': ADDS nx.watts_strogatz_graph(noise_nodes, 2 * parameter // noise_nodes, 0.3)
+        noise_type='BA': ADDS nx.barabasi_albert_graph(noise_nodes, parameter)
+        noise_type='negative': DELETES (parameter %) edges from the graph chosen randomly
+        
+    Parameters
+    ----------
+    G: Wtd_NNetwork object
+        Graph onto which to apply corruption.
+
+    path_save: string
+        By default, None. If not none, path for saving an edgelist of the
+        corrupted graph.
+
+    delimiter: string
+        By default, ','. If path_save is not None, delimiter to use
+        when saving edgelist.
+
+    parameter: float
+        Parameter to use when applying corrputon (See options above).
+
+    noise_nodes: list
+        If not None, the subset of nodes onto which to apply corruption.
+        If None, noise_nodes is all the nodes in the graph, which we recommend.
+
+    noise_type: string
+        The type of noise to apply to the graph G (See options above).
+
+    Returns
+    -------
+    G_corrupt: Wtd_NNetwork object
+       The corrupted graph form from G
+
+    edges_changed: list
+        The list of edges added if additive noisen or the
+        edges deleted if subtractive noise
+    """
+
     noise_sign = "added"
 
     edges_added = []
@@ -84,30 +128,18 @@ def corrupt(G, path_save=None,
         d = {n: sample[n] for n in range(0, noise_nodes)}  ### set operation
     G_noise = nx.Graph()
     # Generate corrupt network
-    # SW = nx.watts_strogatz_graph(70,50,0.05)
     if noise_type == 'ER':
         G_noise = nx.erdos_renyi_graph(noise_nodes, parameter)
-    elif noise_type == 'ER_edges':
-        G_noise = nx.gnm_random_graph(noise_nodes, parameter)
 
     elif noise_type == 'WS':
         # number of edges in WS(n, d, p) = (d/2) * n, want this to be "parameter".
         G_noise = nx.watts_strogatz_graph(noise_nodes, 2 * parameter // noise_nodes, 0.3)
-        print('!!! # edges in WS', len(G_noise.edges))
         # G_noise = nx.watts_strogatz_graph(100, 50, 0.4)
     elif noise_type == 'BA':
         G_noise = nx.barabasi_albert_graph(noise_nodes, parameter)
-    elif noise_type == 'lattice':
-        G_noise = nx.generators.lattice.grid_2d_graph(noise_nodes, noise_nodes)
 
-    # some other possible corruption networks:
-    # SW = nx.watts_strogatz_graph(150,149,0.3)
-    # BA = nx.barabasi_albert_graph(100, 50)
-    # n = range(1,101)
-    # L = nx.generators.lattice.grid_2d_graph(40, 40)
 
     edges = list(G_noise.edges)
-    # print(len(edges))
 
     G_new = nx.Graph()
 
@@ -118,15 +150,6 @@ def corrupt(G, path_save=None,
     # Overlay corrupt edges onto graph
     for edge in edges:
 
-        # for lattice graphs
-        # ------------------------------------
-        # edge1 = edge[0][0] * 40 + edge[0][1]
-        # edge2 = edge[1][0] * 40 + edge[1][1]
-
-        # if not (G.has_edge(d[edge1], d[edge2])):
-        #    edges_added.append([d[edge1], d[edge2]])
-        #    G.add_edge(d[edge1], d[edge2], weight=1)
-        # ---------------------------------------
         if not (G.has_edge(d[edge[0]], d[edge[1]])):
             edges_added.append([d[edge[0]], d[edge[1]]])
             G_new.add_edge(d[edge[0]], d[edge[1]], weight=1)
@@ -160,18 +183,18 @@ def corrupt(G, path_save=None,
                 G_new.add_edge(edge[0], edge[1])
 
     edges_changed = edges_added
-    if noise_type == '-ER_edges':
+    if noise_type == 'negative':
         edges_changed = edges_deleted
 
     # Change this according to the location you want to save it
-    if(path_save != None):
+    if(type(path_save) != type(None)):
         nx.write_edgelist(G_new, path, data=False, delimiter=',')
 
     ### Output network as Wtd_NNetwork class
-    G_out = Wtd_NNetwork()
-    G_out.add_wtd_edges(G_new.edges())
+    G_corrupt = Wtd_NNetwork()
+    G_corrupt.add_wtd_edges(G_new.edges())
 
-    return G_out, edges_changed
+    return G_corrupt, edges_changed
 
 
 def permute_nodes(path_load, path_save):
@@ -188,7 +211,6 @@ def permute_nodes(path_load, path_save):
     G_new = nx.Graph()
     for e in edgelist:
         G_new.add_edge(permutation[e[0] - 1], permutation[e[1] - 1], weight=1)
-        # print('new edge', permutation[e[0]-1], permutation[e[1]-1])
 
     nx.write_edgelist(G, path_save, data=False, delimiter=',')
 
@@ -196,6 +218,23 @@ def permute_nodes(path_load, path_save):
 
 
 def calculate_AUC(x, y):
+
+    """
+    Simple function to calculate AUC of an ROC curve, given
+    a set of points (x,y)
+
+    Parameters
+    ----------
+    x: list
+        The x coordinates of the points of the ROC curve.
+
+    y: list
+        The y coordinates of the points of the ROC curve.
+
+    Returns
+    -------
+    total: the AUC for the set of points (x,y)
+    """
 
     total = 0
     for i in range(len(x) - 1):
@@ -208,9 +247,46 @@ def auc_roc(G_original,
                     G_corrupted,
                     G_recons,
                     path_save=None,
-                    flip_TF=False,
                     noise_type="positive",
-                    verbose=True):
+                    convex_hull=True):
+    """
+    Calculate the AUC and plot the ROC curve for a corruption task,
+    given the original, corrupted, and reconstructed graph.
+
+    Parameters
+    ----------
+    G_original: Wtd_NNetwork object
+        The original graph G.
+
+    G_corrupted: Wtd_NNetwork object
+        The corrupted graph G.
+
+    G_recon: Wtd_NNetwork object
+        The reconstructed graph G. This graph should be a reconstruction
+        of G_corrupted using a dictionary learned from G_corrupted, so it
+        uses no information from G_original.
+
+    path_save: string
+        By default, None. If not none, path for saving image of ROC curve.
+
+    noise_type: string
+        Either "positive" or "negative". The type of corruption added to the 
+        graph, "positive" of additive noise and "negative" if subtractive noise.
+
+    convex_hull: bool
+        If true, takes the convex hull of the ROC curve.
+
+    Returns
+    -------
+    ac: float
+        The AUC of the ROC curve.
+
+    fpr: list
+        The false positive rate (x axis) coordinates of the ROC.
+
+    tpr: list
+        The true positive rate (y axis) coordinates of the ROC.
+    """
     edgelist_original = G_original.get_edges()
 
     edgelist_full = G_corrupted.get_edges()
@@ -228,10 +304,7 @@ def auc_roc(G_original,
             if pred == None:
                 y_pred.append(0)
             else:
-                if not flip_TF:
-                    y_pred.append(pred)
-                else:
-                    y_pred.append(1 - pred)
+                y_pred.append(pred)
 
             if edge in edgelist_original:
                 y_true.append(1)
@@ -247,10 +320,7 @@ def auc_roc(G_original,
                     if pred == None:
                         y_pred.append(0)
                     else:
-                        if not flip_TF:
-                            y_pred.append(pred)
-                        else:
-                            y_pred.append(1 - pred)
+                        y_pred.append(pred)
 
                     if G_original.has_edge(V[i], V[j]):
                         y_true.append(1)
@@ -258,27 +328,23 @@ def auc_roc(G_original,
                         y_true.append(0)
 
     else:
-        raise ValueError("Expected noise_type = 'positive' or 'negative but good noise_type={}".format(noise_type))
+        raise ValueError("Expected noise_type = 'positive' or 'negative but got noise_type={}".format(noise_type))
 
 
     fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+    if not convex_hull:
+        ac = calculate_AUC(fpr, tpr)
 
-    F, T, ac = rocch(fpr, tpr)
-
-    if(verbose):
-        print("AUC with convex hull: ", ac)
-        print("AUC without convex hull: ", calculate_AUC(fpr, tpr))
+    else:
+        fpr, tpr, ac = rocch(fpr, tpr)
 
     fig, axs = plt.subplots(1, 1, figsize=(4.3, 5))
-    axs.plot(F, T)
+
     axs.plot(fpr, tpr)
-    axs.legend(["Convex hull ROC (AUC = %f.2)" % ac, "Original ROC (AUC = %f.2)" % calculate_AUC(fpr, tpr)])
+    axs.legend(["ROC (AUC = %f.2)" % ac])
     fig.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.8, wspace=0.1, hspace=0.1)
 
     if path_save is not None:
         fig.savefig(path_save)
 
-    return F, T, ac, fpr, tpr, thresholds
-
-
-
+    return ac, fpr, tpr

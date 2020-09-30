@@ -357,7 +357,6 @@ class NetDictLearner():
                             omit_folded_edges=True,
                             edge_threshold=0.5,
                             return_weighted=True,
-                            save_file_path=None,
                             verbose=True):
 
 
@@ -405,20 +404,26 @@ class NetDictLearner():
             If return_weighted is set to false, we set all edge weights above edge_threshold
             to 1, and set all others to 0, before returning the network.
 
-        return_weighted:
+        return_weighted: bool
+            By default True. If True, return then return the weighted reconstructed graph.
+            If False, return a simple graph thresholded at edge_threshold.
 
-
+        save_file_path: string
+            Path used for checkpoint refreshing
 
         verbose: bool
             By default, True. If True, shows a progress bar for reconstruction iterations
             completed.
+
+        Returns
+        -------
+        G_recons: Wtd_NNetwork
+            The reconstructed network. If return_weighted=False, G_recons is
+            thresholded to form a simple graph.
         """
 
         print('reconstructing given network...')
         
-        if save_file_path is None:
-            save_file_path = "Network_dictionary/ndl_test"
-
         self.result_dict.update({'NDR iterations': recons_iter})
         self.result_dict.update({'omit_chain_edges for NDR': omit_chain_edges})
 
@@ -446,14 +451,18 @@ class NetDictLearner():
         W_ext_reduced = W_ext
 
         ### Set up paths and folders
-        ### Set up paths and folders
-        default_folder = 'src/Temp_save_graphs'
+        default_folder = './Temp_save_graphs'
         default_name_recons = 'temp_wtd_edgelist_recons'
         default_name_recons_baseline = 'temp_wtd_edgelist_recons_baseline'
         default_name_overlap_count = 'temp_overlap_count'
-        path_recons = save_file_path + '.txt'
+        path_recons = default_folder + '/' + default_name_recons + '.txt'
         path_recons_baseline = default_folder + '/' + default_name_recons_baseline + '.txt'
         path_overlap_count = default_folder + '/' + default_name_overlap_count + '.txt'
+
+        try:
+            os.mkdir(default_folder)
+        except OSError:
+            pass
 
         t0 = time()
         c = 0
@@ -475,9 +484,7 @@ class NetDictLearner():
                 x0 = np.random.choice(np.asarray([i for i in G.vertices]))
                 emb = self.tree_sample(B, x0)
 
-            # meso_patch[2] = nofolding_indicator matrix
 
-            # print('patch', patch.reshape(k, k))
             if omit_chain_edges:
                 ### omit all chain edges from the patches matrix
                 patch_reduced = self.omit_chain_edges(patch)
@@ -487,8 +494,7 @@ class NetDictLearner():
                                     transform_alpha=0,
                                     transform_algorithm='lasso_lars',
                                     positive_code=True)
-                # alpha = L1 regularization parameter. alpha=2 makes all codes zero (why?)
-                # This only occurs when sparse coding a single array
+
                 code = coder.transform(patch_reduced.T)
             else:
                 coder = SparseCoder(dictionary=W_ext.T,  ### Use extended dictioanry
@@ -508,17 +514,9 @@ class NetDictLearner():
             for x in itertools.product(np.arange(k), repeat=2):
                 a = emb[x[0]]
                 b = emb[x[1]]
-                # edge = [str(a), str(b)] ### Use this when nodes are saved as strings, e.g., '154' as in DNA networks
                 edge = [a, b]  ### Use this when nodes are saved as integers, e.g., 154 as in FB networks
 
-                # print('!!!! meso_patch[2]', meso_patch[2])
-
-                # if not (omit_folded_edges and meso_patch[2][x[0],x[1]]==0):
-                #    print('!!!!!!!!! reconstruction masked')
-                #    print('!!!!! meso_patch[2]', meso_patch[2])
                 if self.G_overlap_count.has_edge(a, b) == True:
-                    # print(G_recons.edges)
-                    # print('ind', ind)
                     j = self.G_overlap_count.get_edge_weight(a, b)
                 else:
                     j = 0
@@ -533,17 +531,15 @@ class NetDictLearner():
                     ### Add the same edge to the baseline reconstruction
                     ### if x[0] and x[1] are adjacent in the chain motif
                 if np.abs(x[0] - x[1]) == 1:
-                    # print('baseline edge added!!')
                     self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
 
                 if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
                     self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
 
-                # print progress status and memory use
+                #  progress status
                 if t % 1000 == 0:
                     self.result_dict.update({'homomorphisms_history': emb_history})
                     self.result_dict.update({'code_history': code_history})
-                    print('iteration %i out of %i' % (t, recons_iter))
 
                 # refreshing memory at checkpoints
                 has_saved_checkpoint = False
@@ -552,10 +548,6 @@ class NetDictLearner():
                     pid = os.getpid()
                     py = psutil.Process(pid)
                     memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
-                    print('memory use:', memoryUse)
-
-                    # print('num edges in G_count', len(self.G_overlap_count.get_edges()))
-                    # print('num edges in G_recons', len(self.G_recons.get_edges()))
 
                     ### Load and combine with the saved edges and reconstruction counts
                     if has_saved_checkpoint:
@@ -575,8 +567,6 @@ class NetDictLearner():
 
                     ### Clear up the edges of the current graphs
 
-                    # self.G_overlap_count.clear_edges()
-                    # self.G_recons.clear_edges()
                     self.G_recons = Wtd_NNetwork()
                     self.G_recons_baseline = Wtd_NNetwork()
                     self.G_overlap_count = Wtd_NNetwork()
