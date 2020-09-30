@@ -1,7 +1,7 @@
 # from utils.onmf.onmf import Online_NMF
 from ndl.onmf import Online_NMF
-
 from ndl.NNetwork import NNetwork, Wtd_NNetwork
+# from ndl.utils import utils
 import numpy as np
 import itertools
 from time import time
@@ -350,14 +350,14 @@ class NetDictLearner():
     def reconstruct(self,
                             recons_iter=1000,
                             if_save_history=True,
-                            use_checkpoint_refreshing=False,
                             ckpt_epoch=1000,
                             jump_every=None,
                             omit_chain_edges=False,  ### Turn this on for denoising
                             omit_folded_edges=True,
                             edge_threshold=0.5,
                             return_weighted=True,
-                            save_file_path=None,
+                            save_file_folder=None,
+                            save_file_name=None,
                             verbose=True):
 
 
@@ -416,8 +416,10 @@ class NetDictLearner():
 
         print('reconstructing given network...')
         
-        if save_file_path is None:
-            save_file_path = "Network_dictionary/ndl_test"
+        if save_file_folder is None:
+            save_file_folder = "Network_dictionary"
+        if save_file_name is None:
+            save_file_name = "ndl_test"
 
         self.result_dict.update({'NDR iterations': recons_iter})
         self.result_dict.update({'omit_chain_edges for NDR': omit_chain_edges})
@@ -446,34 +448,27 @@ class NetDictLearner():
         W_ext_reduced = W_ext
 
         ### Set up paths and folders
-        ### Set up paths and folders
-        default_folder = 'src/Temp_save_graphs'
-        default_name_recons = 'temp_wtd_edgelist_recons'
-        default_name_recons_baseline = 'temp_wtd_edgelist_recons_baseline'
-        default_name_overlap_count = 'temp_overlap_count'
-        path_recons = save_file_path + '.txt'
-        path_recons_baseline = default_folder + '/' + default_name_recons_baseline + '.txt'
-        path_overlap_count = default_folder + '/' + default_name_overlap_count + '.txt'
+        save_wtd_recons_name = "wtd_edgelist_recons_" + save_file_name
+        save_baseline_recons_name = "baseline_recons_" + save_file_name
+        save_overlap_count_name = "overlap_count_" + save_file_name
+        path_recons = save_file_folder + "/" + save_wtd_recons_name + '.pickle'
+        path_recons_baseline = save_file_folder + "/" + save_baseline_recons_name + '.pickle'
+        path_overlap_count = save_file_folder + "/" + save_overlap_count_name + '.pickle'
 
         t0 = time()
-        c = 0
-
         if omit_chain_edges:
             ### omit all chain edges from the extended dictionary
             W_ext_reduced = self.omit_chain_edges(W_ext)
 
-        if(verbose):
-            f = trange
-        else:
-            f = np.arange
-
-        for t in f(recons_iter):
+        has_saved_checkpoint = False
+        for t in np.arange(recons_iter):
             meso_patch = self.get_single_patch_glauber(B, emb, omit_folded_edges=omit_folded_edges)
             patch = meso_patch[0]
             emb = meso_patch[1]
             if (jump_every is not None) and (t % jump_every == 0):
                 x0 = np.random.choice(np.asarray([i for i in G.vertices]))
                 emb = self.tree_sample(B, x0)
+                print('homomorphism resampled')
 
             # meso_patch[2] = nofolding_indicator matrix
 
@@ -513,104 +508,150 @@ class NetDictLearner():
 
                 # print('!!!! meso_patch[2]', meso_patch[2])
 
-                # if not (omit_folded_edges and meso_patch[2][x[0],x[1]]==0):
-                #    print('!!!!!!!!! reconstruction masked')
-                #    print('!!!!! meso_patch[2]', meso_patch[2])
-                if self.G_overlap_count.has_edge(a, b) == True:
-                    # print(G_recons.edges)
-                    # print('ind', ind)
-                    j = self.G_overlap_count.get_edge_weight(a, b)
-                else:
-                    j = 0
+                if not (omit_folded_edges and meso_patch[2][x[0], x[1]] == 0):
+                    #    print('!!!!!!!!! reconstruction masked')
+                    #    print('!!!!! meso_patch[2]', meso_patch[2])
+                    if self.G_overlap_count.has_edge(a, b) == True:
+                        # print(G_recons.edges)
+                        # print('ind', ind)
+                        j = self.G_overlap_count.get_edge_weight(a, b)
+                    else:
+                        j = 0
 
-                if self.G_recons.has_edge(a, b) == True:
-                    new_edge_weight = (j * self.G_recons.get_edge_weight(a, b) + patch_recons[x[0], x[1]]) / (j + 1)
-                else:
-                    new_edge_weight = patch_recons[x[0], x[1]]
+                    if self.G_recons.has_edge(a, b) == True:
+                        new_edge_weight = (j * self.G_recons.get_edge_weight(a, b) + patch_recons[x[0], x[1]]) / (j + 1)
+                    else:
+                        new_edge_weight = patch_recons[x[0], x[1]]
 
-                if new_edge_weight > 0 and not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                    self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
-                    ### Add the same edge to the baseline reconstruction
-                    ### if x[0] and x[1] are adjacent in the chain motif
-                if np.abs(x[0] - x[1]) == 1:
-                    # print('baseline edge added!!')
-                    self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
+                    # if j>0 and new_edge_weight==0:
+                    #    print('!!!overlap count %i, new edge weight %.2f' % (j, new_edge_weight))
 
-                if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                    self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
+                    if np.abs(x[0] - x[1]) == 1:
+                        # print('baseline edge added!!')
+                        self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
 
-                # print progress status and memory use
-                if t % 1000 == 0:
-                    self.result_dict.update({'homomorphisms_history': emb_history})
-                    self.result_dict.update({'code_history': code_history})
-                    print('iteration %i out of %i' % (t, recons_iter))
+                    if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
 
-                # refreshing memory at checkpoints
-                has_saved_checkpoint = False
-                if (ckpt_epoch is not None) and (t % ckpt_epoch == 0):
-                    # print out current memory usage
-                    pid = os.getpid()
-                    py = psutil.Process(pid)
-                    memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
-                    print('memory use:', memoryUse)
+                        self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
+                        if omit_chain_edges and np.abs(x[0] - x[1]) == 1:
+                            print('!!!!! Chain edges counted')
 
-                    # print('num edges in G_count', len(self.G_overlap_count.get_edges()))
-                    # print('num edges in G_recons', len(self.G_recons.get_edges()))
+                        if new_edge_weight > 0:
+                            self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
+                            ### Add the same edge to the baseline reconstruction
+                            ### if x[0] and x[1] are adjacent in the chain motif
 
-                    ### Load and combine with the saved edges and reconstruction counts
-                    if has_saved_checkpoint:
-                        self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=True)
-                        self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-                        self.G_overlap_count.load_add_wtd_edges(path=path_overlap_count, increment_weights=True)
 
-                    ### Save current graphs
-                    self.G_recons.save_wtd_edgelist(default_folder=default_folder,
-                                                    default_name=default_name_recons)
-                    self.G_recons_baseline.save_wtd_edgelist(default_folder=default_folder,
-                                                             default_name=default_name_recons_baseline)
-                    self.G_overlap_count.save_wtd_edgelist(default_folder=default_folder,
-                                                           default_name=default_name_overlap_count)
+            # print progress status and memory use
+            if t % 1000 == 0:
+                self.result_dict.update({'homomorphisms_history': emb_history})
+                self.result_dict.update({'code_history': code_history})
+                print('iteration %i out of %i' % (t, recons_iter))
+                # self.G_recons.get_min_max_edge_weights()
+                pid = os.getpid()
+                py = psutil.Process(pid)
+                memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
+                print('memory use:', memoryUse)
 
-                    has_saved_checkpoint = True
+                if verbose:
+                    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in globals().items()),
+                         key= lambda x: -x[1])[:10]:
+                        print("{:>30}: {:>8}".format(name, utils.sizeof_fmt(size)))
 
-                    ### Clear up the edges of the current graphs
+                    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+                         key= lambda x: -x[1])[:10]:
+                        print("{:>30}: {:>8}".format(name, utils.sizeof_fmt(size)))
 
-                    # self.G_overlap_count.clear_edges()
-                    # self.G_recons.clear_edges()
+
+            # refreshing memory at checkpoints
+            if (ckpt_epoch is not None) and (t % ckpt_epoch == 0):
+                # print out current memory usage
+                pid = os.getpid()
+                py = psutil.Process(pid)
+                memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
+                print('memory use:', memoryUse)
+
+                # print('num edges in G_count', len(self.G_overlap_count.get_edges()))
+
+                ### Load and combine with the saved edges and reconstruction counts
+                if has_saved_checkpoint:
+
+                    self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True,
+                                                              is_dict=True, is_pickle=True)
+
+                    G_overlap_count_new = Wtd_NNetwork()
+                    G_overlap_count_new.add_wtd_edges(edges=self.G_overlap_count.wtd_edges, is_dict=True)
+
+                    G_overlap_count_old = Wtd_NNetwork()
+                    G_overlap_count_old.load_add_wtd_edges(path=path_overlap_count, increment_weights=False,
+                                                           is_dict=True, is_pickle=True)
+
+                    G_recons_new = Wtd_NNetwork()
+                    G_recons_new.add_wtd_edges(edges=self.G_recons.wtd_edges, is_dict=True)
+                    # G_recons_new.get_min_max_edge_weights()
+
                     self.G_recons = Wtd_NNetwork()
-                    self.G_recons_baseline = Wtd_NNetwork()
-                    self.G_overlap_count = Wtd_NNetwork()
-                    self.G_recons.add_nodes(nodes=[v for v in G.vertices])
-                    self.G_recons_baseline.add_nodes(nodes=[v for v in G.vertices])
-                    self.G_overlap_count.add_nodes(nodes=[v for v in G.vertices])
+                    self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=False, is_dict=True,
+                                                     is_pickle=True)
+                    # self.G_recons.get_min_max_edge_weights()
 
-        ### Finalize the simplified reconstruction graph
-        G_recons_final = self.G_recons.threshold2simple(threshold=edge_threshold)
-        G_recons_final_baseline = self.G_recons_baseline.threshold2simple(threshold=edge_threshold)
+                    for edge in G_recons_new.wtd_edges.keys():
+                        edge = eval(edge)
+                        count_old = G_overlap_count_old.get_edge_weight(edge[0], edge[1])
+                        count_new = self.G_overlap_count.get_edge_weight(edge[0], edge[1])
+
+                        old_edge_weight = self.G_recons.get_edge_weight(edge[0], edge[1])
+                        new_edge_weight = G_recons_new.get_edge_weight(edge[0], edge[1])
+
+                        if old_edge_weight is not None:
+                            new_edge_weight = (count_old / (count_old + count_new)) * old_edge_weight + (
+                                        count_new / (count_old + count_new)) * new_edge_weight
+
+                        elif count_old is not None:
+                            new_edge_weight = (count_new / (count_old + count_new)) * new_edge_weight
+
+                        self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
+                        G_overlap_count_old.add_edge(edge=edge, weight=count_new, increment_weights=True)
+
+                    # print('!!!! max new weight', max(new_edge_wts))
+                    # self.G_recons = G_recons_old
+                    self.G_overlap_count = G_overlap_count_old
+
+                print('!!! num edges in G_recons', len(self.G_recons.get_edges()))
+                # print('!!! num edges in G_overlap_count', len(self.G_overlap_count.get_edges()))
+                # self.G_recons.get_min_max_edge_weights()
+                # self.G_overlap_count.get_min_max_edge_weights()
+
+                ### Save current graphs
+                self.G_recons.save_wtd_edges(path_recons)
+                self.G_overlap_count.save_wtd_edges(path_overlap_count)
+                self.G_recons_baseline.save_wtd_edges(path_recons_baseline)
+
+                has_saved_checkpoint = True
+
+                ### Clear up the edges of the current graphs
+                self.G_recons = Wtd_NNetwork()
+                self.G_recons_baseline = Wtd_NNetwork()
+                self.G_overlap_count = Wtd_NNetwork()
+                self.G_recons.add_nodes(nodes=[v for v in G.vertices])
+                self.G_recons_baseline.add_nodes(nodes=[v for v in G.vertices])
+                self.G_overlap_count.add_nodes(nodes=[v for v in G.vertices])
+                G_overlap_count_new = Wtd_NNetwork()
+                G_overlap_count_old = Wtd_NNetwork()
+                G_recons_new = Wtd_NNetwork()
+
         if ckpt_epoch is not None:
-            ### Finalizing reconstruction
-            G_recons_combined = Wtd_NNetwork()
+            self.G_recons = Wtd_NNetwork()
+            self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=True, is_dict=True, is_pickle=True)
+            self.G_recons_baseline = Wtd_NNetwork()
+            self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True, is_dict=True, is_pickle=True)
 
-            G_recons_combined.add_wtd_edges(edges=self.G_recons.get_wtd_edgelist(),
-                                            increment_weights=True)
-            G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
-            G_recons_final = G_recons_combined
+        print('Num edges in recons', self.G_recons.get_num_edges())
+        print('Num edges in recons_baseline', self.G_recons_baseline.get_num_edges())
 
-            ### Finalizing baseline reconstruction
-            G_recons_combined_baseline = Wtd_NNetwork()
-
-            G_recons_combined_baseline.add_wtd_edges(edges=self.G_recons_baseline.get_wtd_edgelist(),
-                                                     increment_weights=True)
-            G_recons_combined.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-            G_recons_final_baseline = G_recons_combined_baseline
-
-            self.G_recons = G_recons_final
-            self.G_recons_baseline = G_recons_final_baseline
-            print('Num edges in recons', len(G_recons_final_baseline.get_edges()))
-            print('Num edges in recons_baseline', len(G_recons_final_baseline.get_edges()))
-
-        self.result_dict.update({'Edges reconstructed': G_recons_final.get_edges()})
-        self.result_dict.update({'Edges reconstructed in baseline': G_recons_final_baseline.get_edges()})
+        ### Save weigthed reconstruction into full results dictionary
+        self.result_dict.update({'Edges in weighted reconstruction': self.G_recons.wtd_edges})
+        self.result_dict.update({'Edges reconstructed in baseline': self.G_recons_baseline.wtd_edges})
 
         print('Reconstructed in %.2f seconds' % (time() - t0))
         # print('result_dict', self.result_dict)
@@ -620,7 +661,7 @@ class NetDictLearner():
         if(return_weighted):
             return self.G_recons
         else:
-            return G_recons_final
+            return self.G_recons.threshold2simple(threshold=edge_threshold)
 
 
     #Helper Functions
