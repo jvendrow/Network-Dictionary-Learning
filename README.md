@@ -4,7 +4,7 @@
 
 
 # Network-Dictionary-Learning
-Learning from and reconstructing networks using Nonnegative Matrix Factorization
+Learning from and reconstructing networks using MCMC motif sampling and Nonnegative Matrix Factorization
 
 ## Installation
 
