@@ -1,7 +1,7 @@
 # from utils.onmf.onmf import Online_NMF
 from ndl.onmf import Online_NMF
-
 from ndl.NNetwork import NNetwork, Wtd_NNetwork
+from ndl.utils import utils
 import numpy as np
 import itertools
 from time import time
@@ -350,14 +350,14 @@ class NetDictLearner():
     def reconstruct(self,
                             recons_iter=1000,
                             if_save_history=True,
-                            use_checkpoint_refreshing=False,
                             ckpt_epoch=1000,
                             jump_every=None,
                             omit_chain_edges=False,  ### Turn this on for denoising
                             omit_folded_edges=True,
                             edge_threshold=0.5,
                             return_weighted=True,
-                            verbose=True):
+                            verbose=True,
+                            verbose_memory=False):
 
 
         """
@@ -408,12 +408,13 @@ class NetDictLearner():
             By default True. If True, return then return the weighted reconstructed graph.
             If False, return a simple graph thresholded at edge_threshold.
 
-        save_file_path: string
-            Path used for checkpoint refreshing
-
         verbose: bool
             By default, True. If True, shows a progress bar for reconstruction iterations
             completed.
+
+        verbose_memory: bool
+            By default, False. If True, shows details information about memory usage
+            during every checkpoint refreshing iteration.
 
         Returns
         -------
@@ -465,11 +466,11 @@ class NetDictLearner():
             pass
 
         t0 = time()
-        c = 0
-
         if omit_chain_edges:
             ### omit all chain edges from the extended dictionary
             W_ext_reduced = self.omit_chain_edges(W_ext)
+
+        has_saved_checkpoint = False
 
         if(verbose):
             f = trange
@@ -483,6 +484,7 @@ class NetDictLearner():
             if (jump_every is not None) and (t % jump_every == 0):
                 x0 = np.random.choice(np.asarray([i for i in G.vertices]))
                 emb = self.tree_sample(B, x0)
+                print('homomorphism resampled')
 
 
             if omit_chain_edges:
@@ -516,93 +518,133 @@ class NetDictLearner():
                 b = emb[x[1]]
                 edge = [a, b]  ### Use this when nodes are saved as integers, e.g., 154 as in FB networks
 
-                if self.G_overlap_count.has_edge(a, b) == True:
-                    j = self.G_overlap_count.get_edge_weight(a, b)
-                else:
-                    j = 0
 
-                if self.G_recons.has_edge(a, b) == True:
-                    new_edge_weight = (j * self.G_recons.get_edge_weight(a, b) + patch_recons[x[0], x[1]]) / (j + 1)
-                else:
-                    new_edge_weight = patch_recons[x[0], x[1]]
+                if not (omit_folded_edges and meso_patch[2][x[0], x[1]] == 0):
+                    if self.G_overlap_count.has_edge(a, b) == True:
+                        j = self.G_overlap_count.get_edge_weight(a, b)
+                    else:
+                        j = 0
 
-                if new_edge_weight > 0 and not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                    self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
-                    ### Add the same edge to the baseline reconstruction
-                    ### if x[0] and x[1] are adjacent in the chain motif
-                if np.abs(x[0] - x[1]) == 1:
-                    self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
+                    if self.G_recons.has_edge(a, b) == True:
+                        new_edge_weight = (j * self.G_recons.get_edge_weight(a, b) + patch_recons[x[0], x[1]]) / (j + 1)
+                    else:
+                        new_edge_weight = patch_recons[x[0], x[1]]
 
-                if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
-                    self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
 
-                #  progress status
-                if t % 1000 == 0:
-                    self.result_dict.update({'homomorphisms_history': emb_history})
-                    self.result_dict.update({'code_history': code_history})
+                    if np.abs(x[0] - x[1]) == 1:
+                        self.G_recons_baseline.add_edge(edge, weight=1, increment_weights=False)
 
-                # refreshing memory at checkpoints
-                has_saved_checkpoint = False
-                if (ckpt_epoch is not None) and (t % ckpt_epoch == 0):
-                    # print out current memory usage
-                    pid = os.getpid()
-                    py = psutil.Process(pid)
-                    memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
+                    if not (omit_chain_edges and np.abs(x[0] - x[1]) == 1):
 
-                    ### Load and combine with the saved edges and reconstruction counts
-                    if has_saved_checkpoint:
-                        self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=True)
-                        self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-                        self.G_overlap_count.load_add_wtd_edges(path=path_overlap_count, increment_weights=True)
+                        self.G_overlap_count.add_edge(edge, weight=j + 1, increment_weights=False)
 
-                    ### Save current graphs
-                    self.G_recons.save_wtd_edgelist(default_folder=default_folder,
-                                                    default_name=default_name_recons)
-                    self.G_recons_baseline.save_wtd_edgelist(default_folder=default_folder,
-                                                             default_name=default_name_recons_baseline)
-                    self.G_overlap_count.save_wtd_edgelist(default_folder=default_folder,
-                                                           default_name=default_name_overlap_count)
+                        if new_edge_weight > 0:
+                            self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
+                            ### Add the same edge to the baseline reconstruction
+                            ### if x[0] and x[1] are adjacent in the chain motif
 
-                    has_saved_checkpoint = True
 
-                    ### Clear up the edges of the current graphs
+            # print progress status and memory use
+            if t % 1000 == 0:
+                self.result_dict.update({'homomorphisms_history': emb_history})
+                self.result_dict.update({'code_history': code_history})
+
+                pid = os.getpid()
+                py = psutil.Process(pid)
+                memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
+
+                if verbose_memory:
+                    print('memory use:', memoryUse)
+
+                    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in globals().items()),
+                         key= lambda x: -x[1])[:10]:
+                        print("{:>30}: {:>8}".format(name, utils.sizeof_fmt(size)))
+
+                    for name, size in sorted(((name, sys.getsizeof(value)) for name, value in locals().items()),
+                         key= lambda x: -x[1])[:10]:
+                        print("{:>30}: {:>8}".format(name, utils.sizeof_fmt(size)))
+
+
+            # refreshing memory at checkpoints
+            if (ckpt_epoch is not None) and (t % ckpt_epoch == 0):
+                pid = os.getpid()
+                py = psutil.Process(pid)
+                memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB
+                if verbose_memory:
+
+                    print('memory use:', memoryUse)
+
+                ### Load and combine with the saved edges and reconstruction counts
+                if has_saved_checkpoint:
+
+                    self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True,
+                                                              is_dict=True, is_pickle=True)
+
+                    G_overlap_count_new = Wtd_NNetwork()
+                    G_overlap_count_new.add_wtd_edges(edges=self.G_overlap_count.wtd_edges, is_dict=True)
+
+                    G_overlap_count_old = Wtd_NNetwork()
+                    G_overlap_count_old.load_add_wtd_edges(path=path_overlap_count, increment_weights=False,
+                                                           is_dict=True, is_pickle=True)
+
+                    G_recons_new = Wtd_NNetwork()
+                    G_recons_new.add_wtd_edges(edges=self.G_recons.wtd_edges, is_dict=True)
 
                     self.G_recons = Wtd_NNetwork()
-                    self.G_recons_baseline = Wtd_NNetwork()
-                    self.G_overlap_count = Wtd_NNetwork()
-                    self.G_recons.add_nodes(nodes=[v for v in G.vertices])
-                    self.G_recons_baseline.add_nodes(nodes=[v for v in G.vertices])
-                    self.G_overlap_count.add_nodes(nodes=[v for v in G.vertices])
+                    self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=False, is_dict=True,
+                                                     is_pickle=True)
 
-        ### Finalize the simplified reconstruction graph
-        G_recons_final = self.G_recons.threshold2simple(threshold=edge_threshold)
-        G_recons_final_baseline = self.G_recons_baseline.threshold2simple(threshold=edge_threshold)
+                    for edge in G_recons_new.wtd_edges.keys():
+                        edge = eval(edge)
+                        count_old = G_overlap_count_old.get_edge_weight(edge[0], edge[1])
+                        count_new = self.G_overlap_count.get_edge_weight(edge[0], edge[1])
+
+                        old_edge_weight = self.G_recons.get_edge_weight(edge[0], edge[1])
+                        new_edge_weight = G_recons_new.get_edge_weight(edge[0], edge[1])
+
+                        if old_edge_weight is not None:
+                            new_edge_weight = (count_old / (count_old + count_new)) * old_edge_weight + (
+                                        count_new / (count_old + count_new)) * new_edge_weight
+
+                        elif count_old is not None:
+                            new_edge_weight = (count_new / (count_old + count_new)) * new_edge_weight
+
+                        self.G_recons.add_edge(edge, weight=new_edge_weight, increment_weights=False)
+                        G_overlap_count_old.add_edge(edge=edge, weight=count_new, increment_weights=True)
+
+                    self.G_overlap_count = G_overlap_count_old
+
+
+                ### Save current graphs
+                self.G_recons.save_wtd_edges(path_recons)
+                self.G_overlap_count.save_wtd_edges(path_overlap_count)
+                self.G_recons_baseline.save_wtd_edges(path_recons_baseline)
+
+                has_saved_checkpoint = True
+
+                ### Clear up the edges of the current graphs
+                self.G_recons = Wtd_NNetwork()
+                self.G_recons_baseline = Wtd_NNetwork()
+                self.G_overlap_count = Wtd_NNetwork()
+                self.G_recons.add_nodes(nodes=[v for v in G.vertices])
+                self.G_recons_baseline.add_nodes(nodes=[v for v in G.vertices])
+                self.G_overlap_count.add_nodes(nodes=[v for v in G.vertices])
+                G_overlap_count_new = Wtd_NNetwork()
+                G_overlap_count_old = Wtd_NNetwork()
+                G_recons_new = Wtd_NNetwork()
+
         if ckpt_epoch is not None:
-            ### Finalizing reconstruction
-            G_recons_combined = Wtd_NNetwork()
+            self.G_recons = Wtd_NNetwork()
+            self.G_recons.load_add_wtd_edges(path=path_recons, increment_weights=True, is_dict=True, is_pickle=True)
+            self.G_recons_baseline = Wtd_NNetwork()
+            self.G_recons_baseline.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True, is_dict=True, is_pickle=True)
 
-            G_recons_combined.add_wtd_edges(edges=self.G_recons.get_wtd_edgelist(),
-                                            increment_weights=True)
-            G_recons_combined.load_add_wtd_edges(path=path_recons, increment_weights=True)
-            G_recons_final = G_recons_combined
+        ### Save weigthed reconstruction into full results dictionary
+        self.result_dict.update({'Edges in weighted reconstruction': self.G_recons.wtd_edges})
+        self.result_dict.update({'Edges reconstructed in baseline': self.G_recons_baseline.wtd_edges})
 
-            ### Finalizing baseline reconstruction
-            G_recons_combined_baseline = Wtd_NNetwork()
-
-            G_recons_combined_baseline.add_wtd_edges(edges=self.G_recons_baseline.get_wtd_edgelist(),
-                                                     increment_weights=True)
-            G_recons_combined.load_add_wtd_edges(path=path_recons_baseline, increment_weights=True)
-            G_recons_final_baseline = G_recons_combined_baseline
-
-            self.G_recons = G_recons_final
-            self.G_recons_baseline = G_recons_final_baseline
-            print('Num edges in recons', len(G_recons_final_baseline.get_edges()))
-            print('Num edges in recons_baseline', len(G_recons_final_baseline.get_edges()))
-
-        self.result_dict.update({'Edges reconstructed': G_recons_final.get_edges()})
-        self.result_dict.update({'Edges reconstructed in baseline': G_recons_final_baseline.get_edges()})
-
-        print('Reconstructed in %.2f seconds' % (time() - t0))
+        if(verbose):
+            print('Reconstructed in %.2f seconds' % (time() - t0))
         # print('result_dict', self.result_dict)
         if if_save_history:
             self.result_dict.update({'homomorphisms_history': emb_history})
@@ -610,7 +652,7 @@ class NetDictLearner():
         if(return_weighted):
             return self.G_recons
         else:
-            return G_recons_final
+            return self.G_recons.threshold2simple(threshold=edge_threshold)
 
 
     #Helper Functions

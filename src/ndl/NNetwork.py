@@ -1,5 +1,7 @@
 import numpy as np
 import csv
+import ast
+import pickle
 
 """
 Neighborhood Network package
@@ -82,6 +84,7 @@ class NNetwork():
             self.add_edge(edge)
 
     def get_edges(self):
+        # this may create unecessary large lists
         set_edgelist = []
         for x in self.vertices:
             if x in self.neighb:
@@ -142,8 +145,8 @@ class Wtd_NNetwork():
     '''
 
     def __init__(self):
-        self.edges = []
-        self.edge_weights = {}
+        # self.edges = []
+        self.wtd_edges = {}
         self.neighb = {}
         self.vertices = []
         self.vertices_set = set()
@@ -151,23 +154,30 @@ class Wtd_NNetwork():
         self.colored_edge_weights = {}
         self.color_dim = 0
 
+    def get_num_edges(self):
+        return len(self.wtd_edges.keys())
+
     def add_edges(self, edges, edge_weight=1, increment_weights=True):
         """Given an edgelist, add each edge in the edgelist to the network"""
         for edge in edges:
             self.add_edge(edge, weight=edge_weight, increment_weights=increment_weights)
             # self.edge_weights.update({str(edge): default_edge_weight})
 
-    def add_edge(self, edge, weight=float(1), increment_weights=False):
+    def add_edge(self, edge, weight=float(1), increment_weights=False, is_dict=False):
         """Given an edge, add this edge to the Network"""
-        u, v = edge
+        # if is_dict, then edge is the form of "['123', '456']".
+        if not is_dict:
+            u, v = edge
+        else:
+            u, v = eval(edge)
         # self.edges.append(edge)
         if not increment_weights or not self.has_edge(u, v):
             wt = weight
         else:
             wt = self.get_edge_weight(u, v) + weight
 
-        self.edge_weights.update({str([str(u), str(v)]): wt})
-        self.edge_weights.update({str([str(v), str(u)]): wt})
+        self.wtd_edges.update({str([str(u), str(v)]): wt})
+        self.wtd_edges.update({str([str(v), str(u)]): wt})
 
         if u not in self.neighb:
             self.neighb[u] = {v}
@@ -269,7 +279,7 @@ class Wtd_NNetwork():
         return self.number_nodes
 
     def get_edge_weight(self, u, v):
-        return self.edge_weights.get(str([str(u), str(v)]))
+        return self.wtd_edges.get(str([str(u), str(v)]))
 
     def get_edges(self):
         set_edgelist = []
@@ -310,28 +320,54 @@ class Wtd_NNetwork():
             file.write(str(wtd_edgelist))
         return wtd_edgelist
 
-    def add_wtd_edges(self, edges, increment_weights=False):
-        """Given an edgelist, add each edge in the edgelist to the network"""
-        for wtd_edge in edges:
-            if len(wtd_edge) == 2:
-                self.add_edge(wtd_edge[0:2], weight=1, increment_weights=increment_weights)
-            else:
-                self.add_edge(wtd_edge[0:2], weight=float(wtd_edge[-1]), increment_weights=increment_weights)
-        self.get_edges()
+    def save_wtd_edges(self, path):
+        # Does not creat additional list file and saves directly self.wtd_edges as a np dictionary.
+        with open(path, 'wb') as handle:
+            pickle.dump(self.wtd_edges, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def load_add_wtd_edges(self, path, delimiter=',', increment_weights=False, use_genfromtxt=False):
-        if not use_genfromtxt:
+    def add_wtd_edges(self, edges, increment_weights=False, is_dict=False):
+        """Given an edgelist, add each edge in the edgelist to the network"""
+        """if is dict, edges is a dictionary {edge: weight}"""
+        if not is_dict:
+            for wtd_edge in edges:
+                if len(wtd_edge) == 2:
+                    self.add_edge(wtd_edge[0:2], weight=1, increment_weights=increment_weights)
+                else:
+                    self.add_edge(wtd_edge[0:2], weight=float(wtd_edge[-1]), increment_weights=increment_weights)
+            # self.get_edges()
+        else:
+            for edge in edges.keys():
+                self.add_edge(edge, weight=edges.get(edge), increment_weights=increment_weights, is_dict=True)
+
+    def load_add_wtd_edges(self, path, delimiter=',', increment_weights=False, use_genfromtxt=False, is_dict=False,
+                           is_pickle=False):
+
+        if is_dict and not is_pickle:
+            wtd_edges = np.load(path, allow_pickle=True).items()
+        if is_pickle:
+            with open(path, 'rb') as handle:
+                wtd_edges = pickle.load(handle)
+
+        elif not use_genfromtxt:
             with open(path, "r") as file:
-                wtd_edgelist = eval(file.readline())
+                wtd_edges = eval(file.readline())
         elif delimiter == '\t':
             with open(path) as f:
                 reader = csv.reader(f, delimiter="\t")
-                wtd_edgelist = list(reader)
-        else:
-            wtd_edgelist = np.genfromtxt(path, delimiter=delimiter, dtype=str)
-            wtd_edgelist = wtd_edgelist.tolist()
+                wtd_edges = list(reader)
 
-        self.add_wtd_edges(edges=wtd_edgelist, increment_weights=increment_weights)
+        else:
+            wtd_edges = np.genfromtxt(path, delimiter=delimiter, dtype=str)
+            wtd_edges = wtd_edges.tolist()
+
+        self.add_wtd_edges(edges=wtd_edges, increment_weights=increment_weights, is_dict=is_dict)
+
+    def get_min_max_edge_weights(self):
+        list_wts = []
+        for edge in self.get_wtd_edgelist():
+            list_wts.append(edge[-1])
+        print('minimum edge weight:', min(list_wts))
+        print('maximum edge weight:', max(list_wts))
 
     def clear_edges(self):
         node_set = self.vertices
@@ -424,15 +460,6 @@ class Wtd_NNetwork():
         print('!!!! B', B)
 
         return sum(B[idx, :])
-
-
-
-
-
-
-
-
-
 
 
 

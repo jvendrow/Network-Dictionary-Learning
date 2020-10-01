@@ -16,7 +16,7 @@ def learn_and_reconstruct():
 
     NDL = NetDictLearner(G=G, n_components=25, MCMC_iterations=5)
     NDL.train_dict(verbose=True)
-    G_recons = NDL.reconstruct(recons_iter=500)
+    G_recons = NDL.reconstruct(recons_iter=10000)
 
     acc = utils.recons_accuracy(G, G_recons)
     print(acc)
@@ -30,10 +30,10 @@ def additive_corruption():
 
     G_corrupt, edges_changed = utils.corrupt(G, parameter=0.01, noise_type="ER")
 
-    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=5)
+    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=40)
 
     NDL_corrupt.train_dict()
-    G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000, return_weighted=True, omit_chain_edges=True)
+    G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000, return_weighted=True, omit_chain_edges=True, omit_folded_edges=False)
     auc, fpr, tpr = utils.auc_roc(G, G_corrupt, G_corrupt_recons, noise_type="positive")
     print(auc)
 
@@ -47,14 +47,14 @@ def subtractive_corruption():
     print(len(G.get_edges()))
     print(len(G_corrupt.get_edges()))
 
-    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=20)
+    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=40)
 
     NDL_corrupt.train_dict()
-    G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=2000, return_weighted=True, omit_chain_edges=True, omit_folded_edges=False)
+    G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000, return_weighted=True, omit_chain_edges=True, omit_folded_edges=False)
     auc, fpr, tpr = utils.auc_roc(G, G_corrupt, G_corrupt_recons, noise_type="negative")
     print(auc)
 
 
-#learn_and_reconstruct()
+learn_and_reconstruct()
 #additive_corruption()
-subtractive_corruption()
+#subtractive_corruption()

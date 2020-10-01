@@ -1,6 +1,6 @@
 import numpy as np
 import networkx as nx
-from ndl import Wtd_NNetwork
+from ndl.NNetwork import Wtd_NNetwork
 from sklearn.metrics import roc_curve
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
@@ -348,3 +348,11 @@ def auc_roc(G_original,
         fig.savefig(path_save)
 
     return ac, fpr, tpr
+
+def sizeof_fmt(num, suffix='B'):
+    ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f %s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f %s%s" % (num, 'Yi', suffix)
