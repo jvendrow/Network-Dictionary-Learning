@@ -11,7 +11,7 @@ Learning from and reconstructing networks using MCMC motif sampling and Nonnegat
 To install the Network Dictionary Learning package, run this command in your terminal:
 
 ```bash
-$ pip install ndl
+$ pip install ndlearn
 ```
 
 This is the preferred method to install Network Dictionary Learning. If you don't have [pip](https://pip.pypa.io) installed, these [installation instructions](http://docs.python-guide.org/en/latest/starting/installation/) can guide you through the process.

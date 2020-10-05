@@ -8,8 +8,7 @@ from setuptools import find_packages, setup
 with open("README.md") as readme_file:
     readme = readme_file.read()
 
-test_requirements = ["numpy", "NNetwork"
-    
+test_requirements = ["numpy", "networkx", "scipy", "scikit-learn", "scikit-learn", "matplotlib", "tqdm", "psutil", "tensorly"
 ]
 
 docs_requirements = [
@@ -32,7 +31,8 @@ dev_requirements = [
     "wheel>=0.33.1",
 ]
 
-requirements = ["numpy", "NNetwork"]
+requirements = ["numpy", "networkx", "scipy", "scikit-learn", "scikit-learn", "matplotlib", "tqdm", "psutil", "tensorly"
+]
 
 extra_requirements = {
     "test": test_requirements,
@@ -70,8 +70,8 @@ setup(
     long_description=readme,
     long_description_content_type="text/markdown",
     include_package_data=True,
-    keywords="ndl",
-    name="ndl",
+    keywords="ndlearn",
+    name="ndlearn",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     python_requires=">=3.6",
@@ -82,6 +82,6 @@ setup(
     url="https://github.com/jvendrow/Network-Dictionary-Learning",
     # Do not edit this string manually, always use bumpversion
     # Details in CONTRIBUTING.rst
-    version="1.0.0",
+    version="0.0.1",
     zip_safe=False,
 )
