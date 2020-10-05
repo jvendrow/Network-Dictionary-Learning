@@ -4,7 +4,9 @@
 
 
 # Network-Dictionary-Learning
-Learning from and reconstructing networks using MCMC motif sampling and Nonnegative Matrix Factorization
+Learning from and reconstructing networks using MCMC motif sampling and Nonnegative Matrix Factorization.
+
+By Hanbaek Lyu, Joshua Vendrow, and Yacoub Kureh.
 
 ## Installation
 
