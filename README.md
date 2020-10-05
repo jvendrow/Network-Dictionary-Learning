@@ -67,17 +67,15 @@ To add positive corruption (overlaying edges) or negative corruption (deleting e
 ```python
 >>> len(G.edges())
 1000
->>> G_add_50 = utils.corrupt(G, p=0.5, noise_type="ER")
->>>len(G_add_50.edges())
-1500
->>> G_remove_10 = utils.corrupt(G, p=-0.1)
+>>> G_add = utils.corrupt(G, p=0.1, noise_type="ER")
+>>> G_remove_10 = utils.corrupt(G, p=0.1, noise_type="negative")
 >>>len(G_remove_10.edges())
 900
 ```
 
 To measure the AUC of network denoising with positive (or negative) noise:
 ```python
->>> G_corrupt = utils.corrupt(G, p=0.5, noise_type="ER")
+>>> G_corrupt = utils.corrupt(G, p=0.1, noise_type="ER")
 >>> NDL_corrupt = NetDictLearner(G=G_corrupt)
 >>> NDL_corrupt.train_dict()
 >>> G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000)
