@@ -21,9 +21,9 @@ This is the preferred method to install Network Dictionary Learning. If you don'
 Our package lies on the backbone of the NNetwork class (see https://github.com/HanbaekLyu/NNetwork). 
 
 ```python
->>> from NNetwork import Wtd_NNetwork
+>>> from ndl import Wtd_NNetwork
 >>> G = Wtd_NNetwork()
->>> G.load_edges("example.txt", delimiter=",")
+>>> G.load_add_edges_wtd("example.txt", use_genfromtxt=True, delimiter=",")
 ```
 #### Learning a Dictionary
 
