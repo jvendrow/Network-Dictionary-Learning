@@ -11,10 +11,7 @@ import networkx as nx
 import os
 import psutil
 import matplotlib.gridspec as gridspec
-from time import sleep
 import sys
-from sklearn.metrics import roc_curve
-from scipy.spatial import ConvexHull
 import random
 from tqdm import trange
 
@@ -213,7 +210,7 @@ class NetDictLearner():
         return self.W
 
     def display_dict(self,
-                     title,
+                     title="Dictionary",
                      path=None,
                      show=True,
                      make_first_atom_2by2=False,

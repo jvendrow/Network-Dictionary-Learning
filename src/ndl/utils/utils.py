@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 from ndl.NNetwork import Wtd_NNetwork
 from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 
@@ -31,39 +32,48 @@ def recons_accuracy(G, G_recons):
     return recons_accuracy
 
 
+def convex_hull_roc(x, y):
+    
+    """
+    Calculates the convex hull of an ROC curve.
+    
+    Parameters
+    ----------
+    x: list, type float in [0,1]
+        The x coordinates for the ROC curve given by points (x,y).
+        
+    y: list, type float in [0,1]
+        The y coordinates for the ROC curve given by points (x,y).
+        
+    Returns
+    -------
+    x_hull: list, type float in [0,1]
+        The x coordinates for the new ROC curve given by points 
+        (x_hull,y_hull), the convex hull or curve (x,y).
+        
+    y_hull: list, type float in [0,1]
+        The y coordinates for the new ROC curve given by points 
+        (x_hull,y_hull), the convex hull or curve (x,y).
+        
+    acc: float
+        The AUC for the convex hull of the ROC curve, calculated by:
+        sklearn.metrics.auc(x_hull,y_hull).
+    """
 
-def rocch(fpr0, tpr0):
-    """
-    @author: Dr. Fayyaz Minhas (http://faculty.pieas.edu.pk/fayyaz/)
-    Construct the convex hull of a Receiver Operating Characteristic (ROC) curve
-        Input:
-            fpr0: List of false positive rates in range [0,1]
-            tpr0: List of true positive rates in range [0,1]
-                fpr0,tpr0 can be obtained from sklearn.metrics.roc_curve or
-                    any other packages such as pyml
-        Return:
-            F: list of false positive rates on the convex hull
-            T: list of true positive rates on the convex hull
-                plt.plot(F,T) will plot the convex hull
-            auc: Area under the ROC Convex hull
-    """
-    fpr = np.array([0] + list(fpr0) + [1.0, 1, 0])
-    tpr = np.array([0] + list(tpr0) + [1.0, 0, 0])
-    hull = ConvexHull(np.vstack((fpr, tpr)).T)
+    x = np.array([0] + list(x) + [1,1])
+    y = np.array([0] + list(y) + [1,0])
+    hull = ConvexHull(np.vstack((x, y)).T)
     vert = hull.vertices
-    vert = vert[np.argsort(fpr[vert])]
-    F = [0]
-    T = [0]
-    for v in vert:
-        ft = (fpr[v], tpr[v])
-        if ft == (0, 0) or ft == (1, 1) or ft == (1, 0):
-            continue
-        F += [fpr[v]]
-        T += [tpr[v]]
-    F += [1]
-    T += [1]
-    auc = np.trapz(T, F)
-    return F, T, auc
+    vert.sort()
+    
+    vert.sort()
+    
+    x_hull = [x[i] for i in vert if not (x[i]==1 and y[i]==0)]
+    y_hull = [y[i] for i in vert if not (x[i]==1 and y[i]==0)]
+
+    acc = auc(x_hull,y_hull)
+    return x_hull, y_hull, acc
+
 
 
 def corrupt(G, path_save=None,
@@ -336,7 +346,7 @@ def auc_roc(G_original,
         ac = calculate_AUC(fpr, tpr)
 
     else:
-        fpr, tpr, ac = rocch(fpr, tpr)
+        fpr, tpr, ac = convex_hull_roc(fpr, tpr)
 
     fig, axs = plt.subplots(1, 1, figsize=(4.3, 5))
 

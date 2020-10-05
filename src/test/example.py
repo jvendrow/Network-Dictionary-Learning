@@ -21,6 +21,19 @@ def learn_and_reconstruct():
     acc = utils.recons_accuracy(G, G_recons)
     print(acc)
 
+def learn_and_plot():
+
+    print("Learning and reconstructing network...")
+
+    G = Wtd_NNetwork()
+    G.load_add_wtd_edges("Caltech36.txt", use_genfromtxt=True)
+
+    NDL = NetDictLearner(G=G, n_components=25, MCMC_iterations=10)
+    NDL.train_dict(verbose=True)
+
+    NDL.display_dict(title="Network Dictionary")
+
+
 def additive_corruption():
 
     print("Denoising for additive corruption...")
@@ -47,7 +60,7 @@ def subtractive_corruption():
     print(len(G.get_edges()))
     print(len(G_corrupt.get_edges()))
 
-    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=40)
+    NDL_corrupt = NetDictLearner(G=G_corrupt, n_components=25, MCMC_iterations=50)
 
     NDL_corrupt.train_dict()
     G_corrupt_recons = NDL_corrupt.reconstruct(recons_iter=10000, return_weighted=True, omit_chain_edges=True, omit_folded_edges=False)
@@ -55,6 +68,7 @@ def subtractive_corruption():
     print(auc)
 
 
-learn_and_reconstruct()
+#learn_and_reconstruct()
+learn_and_plot()
 #additive_corruption()
 #subtractive_corruption()
