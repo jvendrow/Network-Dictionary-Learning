@@ -23,7 +23,7 @@ Our package lies on the backbone of the NNetwork class (see https://github.com/H
 ```python
 >>> from NNetwork import Wtd_NNetwork
 >>> G = Wtd_NNetwork()
->>> G.load_edges("Data/example.txt", delimiter=",")
+>>> G.load_edges("example.txt", delimiter=",")
 ```
 #### Learning a Dictionary
 
@@ -36,7 +36,7 @@ Our package lies on the backbone of the NNetwork class (see https://github.com/H
 
 Display and save the learned dictionary:
 ```python
->>> NDL.display_dict(save_file="Dictionaries/example_dict.npy")
+>>> NDL.display_dict(path="example_dict.npy")
 ```
 
 Replace the dictionary with a pre-trained dictionary and/or replace the network:
