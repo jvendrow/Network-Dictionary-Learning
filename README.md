@@ -6,6 +6,10 @@
 # Network-Dictionary-Learning
 Learning from and reconstructing networks using MCMC motif sampling and Nonnegative Matrix Factorization.
 
+[![PyPI Version](https://img.shields.io/pypi/v/ndlearn.svg)](https://pypi.org/project/ndlearn/)
+[![Supported Python Versions](https://img.shields.io/pypi/pyversions/ndlearn.svg)](https://pypi.org/project/ndlearn/)
+[![Downloads](https://pepy.tech/badge/ndlearn)](https://pepy.tech/project/ndlearn)
+
 By Hanbaek Lyu, Joshua Vendrow, and Yacoub Kureh.
 
 ## Installation
