@@ -37,7 +37,7 @@ Our package lies on the backbone of the NNetwork class (see https://github.com/H
 >>> from ndl import NetDictLearner
 >>> NDL = NetDictLearner(G=G, n_components=25, k=21)
 >>> NDL.train_dict()
->>> W = NDL.get_dictionary()
+>>> W = NDL.W
 ```
 
 Display and save the learned dictionary:
